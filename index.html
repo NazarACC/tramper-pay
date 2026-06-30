@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Tramper Pay</title>
+<style>
+  :root{
+    --bg:#0E1117;
+    --panel:#171C26;
+    --panel-2:#1E2430;
+    --line:#2A3142;
+    --amber:#FFB020;
+    --amber-dim:#7A5A1E;
+    --green:#3DD68C;
+    --red:#FF5C5C;
+    --text:#EDEFF4;
+    --text-dim:#8B93A7;
+    --mono: 'SF Mono', 'Roboto Mono', 'Consolas', monospace;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    padding-bottom:140px;
+    min-height:100vh;
+  }
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    background:linear-gradient(180deg,var(--bg) 80%,transparent);
+    padding:18px 16px 10px 16px;
+  }
+  .topbar h1{
+    font-size:13px;
+    letter-spacing:0.18em;
+    text-transform:uppercase;
+    color:var(--amber);
+    margin:0 0 2px 0;
+    font-weight:700;
+  }
+  .topbar .sub{
+    font-size:12px;
+    color:var(--text-dim);
+  }
+  .weekbar{
+    display:flex; align-items:center; gap:10px;
+    margin-top:12px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:10px 14px;
+  }
+  .weekbar label{font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.08em;}
+  .weekbar input[type=date]{
+    background:transparent; border:none; color:var(--text);
+    font-size:15px; font-family:var(--mono); width:100%;
+  }
+  .weekbar input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.7);}
+
+  .container{padding:14px 12px 0 12px; max-width:560px; margin:0 auto;}
+
+  .daycard{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:18px;
+    margin-bottom:12px;
+    overflow:hidden;
+    transition:border-color .2s;
+  }
+  .daycard.off{opacity:.55;}
+  .daycard.weekend{border-color:#3A2E1A;}
+
+  .daycard-head{
+    display:flex; justify-content:space-between; align-items:center;
+    padding:14px 16px 10px 16px;
+  }
+  .daycard-head .dayname{
+    font-size:16px; font-weight:700;
+  }
+  .daycard-head .daydate{
+    font-size:12px; color:var(--text-dim); font-family:var(--mono);
+  }
+  .daypay{
+    font-family:var(--mono);
+    font-size:18px;
+    font-weight:700;
+    color:var(--green);
+  }
+  .daypay.zero{color:var(--text-dim); font-weight:400;}
+
+  .field-row{
+    display:flex; gap:8px;
+    padding:0 14px 12px 14px;
+    flex-wrap:wrap;
+  }
+  .field{
+    flex:1 1 auto;
+    min-width:90px;
+  }
+  .field.small{flex:0 1 78px; min-width:64px;}
+  .field label{
+    display:block;
+    font-size:10px;
+    color:var(--text-dim);
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    margin-bottom:5px;
+  }
+  select, input[type=number]{
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text);
+    font-size:15px;
+    padding:9px 8px;
+    border-radius:10px;
+    appearance:none;
+    -webkit-appearance:none;
+    font-family:inherit;
+  }
+  input[type=number]{font-family:var(--mono); text-align:center;}
+  select:focus, input:focus{outline:2px solid var(--amber); outline-offset:1px;}
+  select.daytype{font-weight:600;}
+
+  .toggles{
+    display:flex; gap:8px; padding:0 14px 14px 14px; flex-wrap:wrap;
+  }
+  .toggle-btn{
+    flex:1 1 auto;
+    min-width:80px;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--text-dim);
+    font-size:12.5px;
+    font-weight:600;
+    padding:9px 6px;
+    border-radius:10px;
+    text-align:center;
+    cursor:pointer;
+    user-select:none;
+    transition:all .15s;
+  }
+  .toggle-btn.active{
+    background:rgba(255,176,32,0.16);
+    border-color:var(--amber);
+    color:var(--amber);
+  }
+  .toggle-btn.active.alt{
+    background:rgba(61,214,140,0.14);
+    border-color:var(--green);
+    color:var(--green);
+  }
+
+  .hidden{display:none !important;}
+
+  .summary{
+    position:fixed;
+    bottom:0; left:0; right:0;
+    background:linear-gradient(180deg,rgba(14,17,23,0) 0%, var(--bg) 22%);
+    padding:18px 14px max(18px, env(safe-area-inset-bottom)) 14px;
+    z-index:30;
+  }
+  .summary-card{
+    max-width:560px; margin:0 auto;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:18px;
+    padding:14px 18px;
+    box-shadow:0 -4px 24px rgba(0,0,0,0.45);
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  .summary-left .lbl{font-size:11px; color:var(--text-dim); text-transform:uppercase; letter-spacing:0.08em;}
+  .summary-left .hrs{font-size:12px; color:var(--text-dim); font-family:var(--mono); margin-top:2px;}
+  .summary-right{font-family:var(--mono); font-size:28px; font-weight:800; color:var(--amber); letter-spacing:-0.02em;}
+
+  .info-strip{
+    font-size:11px;
+    color:var(--text-dim);
+    padding:4px 16px 12px 16px;
+    line-height:1.5;
+    border-top:1px dashed var(--line);
+    margin-top:2px;
+    display:none;
+  }
+  .info-strip.show{display:block;}
+
+  .reset-row{
+    text-align:center; padding:18px 0 6px 0;
+  }
+  .reset-row button{
+    background:none; border:1px solid var(--line); color:var(--text-dim);
+    font-size:12px; padding:8px 16px; border-radius:20px;
+  }
+
+  ::placeholder{color:#4B5468;}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <h1>Tramper Pay</h1>
+  <div class="sub">Чиста зарплатня за тиждень</div>
+  <div class="weekbar">
+    <label>Тиждень з (Пн)</label>
+    <input type="date" id="weekStart">
+  </div>
+</div>
+
+<div class="container" id="daysContainer"></div>
+
+<div class="reset-row">
+  <button onclick="resetWeek()">Скинути тиждень</button>
+</div>
+
+<div class="summary">
+  <div class="summary-card">
+    <div class="summary-left">
+      <div class="lbl">Net за тиждень</div>
+      <div class="hrs" id="totalHours">0 год · 0 днів</div>
+    </div>
+    <div class="summary-right" id="totalPay">£0.00</div>
+  </div>
+</div>
+
+<script>
+// ===================== RATES (net, take-home) =====================
+const RATES = {
+  basicDaily: 123.20,      // Daily Basic Rate (up to 11h)
+  mealAllowance: 10.00,    // Daily Meal Allowance
+  otStandard: 12.00,       // Overtime per hour over 11h (weekday)
+  satRunUp5: 12.00,        // Saturday Run In/Out up to 5h
+  satRunAfter5: 14.00,     // Saturday Run In/Out after 5h (per hour)
+  satFullShift: 14.00,     // Saturday Full Shift Job (per hour)
+  sunRunUp5: 14.00,        // Sunday/BH Run In/Out up to 5h
+  sunRunAfter5: 16.00,     // Sunday/BH Run In/Out after 5h (per hour)
+  sunFullShift: 16.00,     // Sunday/BH Full Shift Job (per hour)
+  nightOut: 26.20,         // Night Out Allowance
+  nightIn: 16.00,          // Night In Allowance
+  holiday: 123.20,         // Holiday Rate per day
+  splitter: 16.00,         // Splitter Bonus per split
+  adr: 20.00,              // ADR Bonus per job
+  genset: 12.00,           // Genset Compensation
+  samsaraA: 9.60,
+  samsaraB: 6.40,
+  samsaraC: 4.00
+};
+
+const DAYS = ["Понеділок","Вівторок","Середа","Четвер","П'ятниця","Субота","Неділя"];
+const DAY_KEYS = ["mon","tue","wed","thu","fri","sat","sun"];
+
+const DAYTYPE_OPTIONS = ["Будній","Субота","Неділя","Святковий","Відпустка","Вихідний"];
+const DAYTYPE_MAP = {
+  "Будній":"weekday","Субота":"saturday","Неділя":"sunday",
+  "Святковий":"bankholiday","Відпустка":"holiday","Вихідний":"off"
+};
+
+const SHIFT_OPTIONS = [
+  {v:"-", t:"—"},
+  {v:"runUp5", t:"Заїзд/виїзд (до 5г)"},
+  {v:"runAfter5", t:"Заїзд/виїзд (понад 5г)"},
+  {v:"fullShift", t:"Повна зміна"}
+];
+
+let state = {};
+
+function defaultDayState(i){
+  return {
+    dayType: i < 5 ? "weekday" : (i===5 ? "saturday" : "sunday"),
+    shiftType: "-",
+    hours: "",
+    adr: 0, genset: 0, splitter: 0,
+    samsara: "none",
+    nightOut: false,
+    nightIn: false
+  };
+}
+
+function loadState(){
+  DAY_KEYS.forEach((k,i)=>{ state[k] = defaultDayState(i); });
+}
+loadState();
+
+function fmt(n){
+  return "£" + n.toLocaleString('en-GB', {minimumFractionDigits:2, maximumFractionDigits:2});
+}
+
+function calcDay(d){
+  if(d.dayType === "off") return 0;
+  let base = 0;
+  const hrs = parseFloat(d.hours) || 0;
+
+  if(d.dayType === "holiday"){
+    base = RATES.holiday;
+  } else if(d.dayType === "weekday"){
+    base = RATES.basicDaily + RATES.mealAllowance + Math.max(0, hrs - 11) * RATES.otStandard;
+  } else if(d.dayType === "saturday" || d.dayType === "sunday" || d.dayType === "bankholiday"){
+    const isSat = d.dayType === "saturday";
+    if(d.shiftType === "runUp5"){
+      base = isSat ? RATES.satRunUp5 : RATES.sunRunUp5;
+    } else if(d.shiftType === "runAfter5"){
+      base = hrs * (isSat ? RATES.satRunAfter5 : RATES.sunRunAfter5);
+    } else if(d.shiftType === "fullShift"){
+      const paidHours = Math.max(hrs, 10);
+      base = paidHours * (isSat ? RATES.satFullShift : RATES.sunFullShift);
+      if(hrs > 10) base += RATES.mealAllowance;
+    } else {
+      base = 0;
+    }
+  }
+
+  let bonuses = (d.adr||0)*RATES.adr + (d.genset||0)*RATES.genset + (d.splitter||0)*RATES.splitter;
+  if(d.samsara === "A") bonuses += RATES.samsaraA;
+  else if(d.samsara === "B") bonuses += RATES.samsaraB;
+  else if(d.samsara === "C") bonuses += RATES.samsaraC;
+
+  if(d.nightOut) bonuses += RATES.nightOut;
+  if(d.nightIn) bonuses += RATES.nightIn;
+
+  return base + bonuses;
+}
+
+function render(){
+  const container = document.getElementById('daysContainer');
+  container.innerHTML = "";
+
+  let weekStartVal = document.getElementById('weekStart').value;
+  let weekStart = weekStartVal ? new Date(weekStartVal + "T00:00:00") : null;
+
+  let totalPay = 0, totalHours = 0, daysWorked = 0;
+
+  DAY_KEYS.forEach((key, i) => {
+    const d = state[key];
+    const pay = calcDay(d);
+    totalPay += pay;
+    const hrs = parseFloat(d.hours) || 0;
+    totalHours += hrs;
+    if(d.dayType !== "off") daysWorked++;
+
+    let dateStr = "";
+    if(weekStart){
+      const dt = new Date(weekStart);
+      dt.setDate(dt.getDate() + i);
+      dateStr = dt.toLocaleDateString('uk-UA', {day:'2-digit', month:'2-digit'});
+    }
+
+    const isWeekendType = (d.dayType === "saturday" || d.dayType === "sunday" || d.dayType === "bankholiday");
+    const isOff = d.dayType === "off";
+
+    const card = document.createElement('div');
+    card.className = "daycard" + (isOff ? " off" : "") + (isWeekendType ? " weekend" : "");
+
+    const dayTypeLabel = Object.keys(DAYTYPE_MAP).find(k => DAYTYPE_MAP[k] === d.dayType);
+
+    card.innerHTML = `
+      <div class="daycard-head">
+        <div>
+          <div class="dayname">${DAYS[i]}</div>
+          <div class="daydate">${dateStr}</div>
+        </div>
+        <div class="daypay ${pay===0 ? 'zero':''}">${fmt(pay)}</div>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label>Тип дня</label>
+          <select class="daytype" data-key="${key}" data-field="dayType">
+            ${DAYTYPE_OPTIONS.map(o => `<option value="${o}" ${DAYTYPE_MAP[o]===d.dayType?'selected':''}>${o}</option>`).join('')}
+          </select>
+        </div>
+        ${!isOff ? `
+        <div class="field small">
+          <label>Години</label>
+          <input type="number" inputmode="decimal" min="0" max="24" step="0.5" placeholder="0"
+            data-key="${key}" data-field="hours" value="${d.hours}">
+        </div>` : ``}
+      </div>
+
+      ${isWeekendType ? `
+      <div class="field-row">
+        <div class="field">
+          <label>Тип зміни (сб/нд)</label>
+          <select data-key="${key}" data-field="shiftType">
+            ${SHIFT_OPTIONS.map(o => `<option value="${o.v}" ${o.v===d.shiftType?'selected':''}>${o.t}</option>`).join('')}
+          </select>
+        </div>
+      </div>` : ``}
+
+      ${!isOff ? `
+      <div class="field-row">
+        <div class="field small">
+          <label>ADR</label>
+          <input type="number" inputmode="numeric" min="0" max="10" placeholder="0"
+            data-key="${key}" data-field="adr" value="${d.adr}">
+        </div>
+        <div class="field small">
+          <label>Генсет</label>
+          <input type="number" inputmode="numeric" min="0" max="10" placeholder="0"
+            data-key="${key}" data-field="genset" value="${d.genset}">
+        </div>
+        <div class="field small">
+          <label>Сплітер</label>
+          <input type="number" inputmode="numeric" min="0" max="10" placeholder="0"
+            data-key="${key}" data-field="splitter" value="${d.splitter}">
+        </div>
+        <div class="field">
+          <label>Самсара</label>
+          <select data-key="${key}" data-field="samsara">
+            <option value="none" ${d.samsara==='none'?'selected':''}>—</option>
+            <option value="A" ${d.samsara==='A'?'selected':''}>A · Зелена</option>
+            <option value="B" ${d.samsara==='B'?'selected':''}>B · Жовта</option>
+            <option value="C" ${d.samsara==='C'?'selected':''}>C · Червона</option>
+          </select>
+        </div>
+      </div>
+      <div class="toggles">
+        <div class="toggle-btn ${d.nightOut?'active':''}" data-key="${key}" data-field="nightOut">🌙 Ночівля поза домом</div>
+        <div class="toggle-btn alt ${d.nightIn?'active':''}" data-key="${key}" data-field="nightIn">🏠 Ночівля вдома (Night In)</div>
+      </div>` : ``}
+    `;
+
+    container.appendChild(card);
+  });
+
+  document.getElementById('totalPay').textContent = fmt(totalPay);
+  document.getElementById('totalHours').textContent = `${totalHours} год · ${daysWorked} дн.`;
+
+  attachListeners();
+}
+
+function attachListeners(){
+  document.querySelectorAll('select[data-key]').forEach(el => {
+    el.addEventListener('change', (e) => {
+      const key = e.target.dataset.key;
+      const field = e.target.dataset.field;
+      let val = e.target.value;
+      if(field === 'dayType') val = DAYTYPE_MAP[val];
+      state[key][field] = val;
+      render();
+    });
+  });
+  document.querySelectorAll('input[type=number][data-key]').forEach(el => {
+    el.addEventListener('input', (e) => {
+      const key = e.target.dataset.key;
+      const field = e.target.dataset.field;
+      state[key][field] = e.target.value;
+      render();
+    });
+  });
+  document.querySelectorAll('.toggle-btn').forEach(el => {
+    el.addEventListener('click', (e) => {
+      const key = e.currentTarget.dataset.key;
+      const field = e.currentTarget.dataset.field;
+      state[key][field] = !state[key][field];
+      render();
+    });
+  });
+}
+
+document.getElementById('weekStart').addEventListener('change', render);
+
+function resetWeek(){
+  loadState();
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
