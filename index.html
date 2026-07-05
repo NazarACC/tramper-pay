@@ -16,6 +16,10 @@
   .topbar{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--bg) 80%,transparent);padding:18px 16px 10px;}
   .topbar h1{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--amber);margin:0 0 2px;font-weight:700;}
   .topbar .sub{font-size:12px;color:var(--text-dim);}
+  .topbar-title-row{display:flex;justify-content:space-between;align-items:center;}
+  .lang-switch{display:flex;gap:4px;}
+  .lang-btn{background:var(--panel-2);border:1px solid var(--line);color:var(--text-dim);font-size:13px;padding:5px 10px;border-radius:8px;cursor:pointer;}
+  .lang-btn.active{border-color:var(--amber);color:var(--amber);}
   .weekbar{display:flex;align-items:center;gap:10px;margin-top:12px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 14px;}
   .weekbar label{font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;}
   .weekbar input[type=date]{background:transparent;border:none;color:var(--text);font-size:15px;font-family:var(--mono);width:100%;}
@@ -56,20 +60,28 @@
 <body>
 
 <div class="topbar">
-  <h1>Tramper Pay</h1>
-  <div class="sub">Чиста зарплатня за тиждень</div>
+  <div class="topbar-title-row">
+    <div>
+      <h1>Tramper Pay</h1>
+      <div class="sub" id="subTitle"></div>
+    </div>
+    <div class="lang-switch">
+      <button class="lang-btn active" onclick="setLang('uk')">🇺🇦</button>
+      <button class="lang-btn" onclick="setLang('en')">🇬🇧</button>
+    </div>
+  </div>
   <div class="weekbar">
-    <label>Тиждень з (Нд)</label>
+    <label id="lblWeek"></label>
     <input type="date" id="weekStart">
   </div>
   <div style="display:flex;gap:8px;margin-top:8px;">
     <div style="flex:1;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 14px;">
-      <label style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:4px;">Водій</label>
-      <input type="text" id="driverName" placeholder="Ім'я прізвище" style="background:transparent;border:none;color:var(--text);font-size:15px;width:100%;font-family:inherit;" oninput="saveExtra()">
+      <label id="lblDriver" style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:4px;"></label>
+      <input type="text" id="driverName" style="background:transparent;border:none;color:var(--text);font-size:15px;width:100%;font-family:inherit;" oninput="saveExtra()">
     </div>
     <div style="flex:1;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 14px;">
-      <label style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:4px;">Номер фури</label>
-      <input type="text" id="truckNum" placeholder="напр. AB12 CDE" style="background:transparent;border:none;color:var(--text);font-size:15px;width:100%;font-family:var(--mono);" oninput="saveExtra()">
+      <label id="lblTruck" style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:4px;"></label>
+      <input type="text" id="truckNum" placeholder="AB12 CDE" style="background:transparent;border:none;color:var(--text);font-size:15px;width:100%;font-family:var(--mono);" oninput="saveExtra()">
     </div>
   </div>
 </div>
@@ -77,55 +89,149 @@
 <div class="container" id="daysContainer"></div>
 
 <div class="reset-row">
-  <button onclick="resetWeek()">Скинути тиждень</button>
-  <button onclick="generateReport()" style="margin-left:10px;border-color:#FFB020;color:#FFB020;">📋 Звіт тижня</button>
+  <button onclick="resetWeek()" id="btnReset"></button>
+  <button onclick="generateReport()" id="btnReport" style="margin-left:10px;border-color:#FFB020;color:#FFB020;"></button>
 </div>
 
 <div class="summary">
   <div class="summary-card">
     <div class="summary-left">
-      <div class="lbl">Net за тиждень</div>
-      <div class="hrs" id="totalHours">0 год · 0 днів</div>
+      <div class="lbl" id="lblTotal"></div>
+      <div class="hrs" id="totalHours"></div>
     </div>
     <div class="summary-right" id="totalPay">£0.00</div>
   </div>
 </div>
 
 <script>
+// ===================== RATES =====================
 const RATES = {
   basicDaily:123.20, mealAllowance:10.00, otStandard:12.00,
-  satRunUp5:12.00, satRunAfter5:14.00, satFullShift:14.00,
-  sunRunUp5:14.00, sunRunAfter5:16.00, sunFullShift:16.00,
+  satRunUp5:12.00, satRunAfter5:14.00,
+  sunRunUp5:14.00, sunRunAfter5:16.00,
   nightOut:26.20, nightIn:16.00, holiday:123.20,
   splitter:16.00, adr:20.00, genset:12.00,
   samsaraA:9.60, samsaraB:6.40, samsaraC:4.00
 };
 
-const DAYS = ["Неділя","Понеділок","Вівторок","Середа","Четвер","П'ятниця","Субота"];
-const DAY_KEYS = ["sun","mon","tue","wed","thu","fri","sat"];
-const DAYTYPE_OPTIONS = ["Будній","Субота","Неділя","Святковий","Відпустка","Вихідний"];
-const DAYTYPE_MAP = {"Будній":"weekday","Субота":"saturday","Неділя":"sunday","Робочий":"saturday","Робоча":"sunday","Святковий":"bankholiday","Відпустка":"holiday","Вихідний":"off"};
-const DAYTYPE_RMAP = Object.fromEntries(Object.entries(DAYTYPE_MAP).map(([k,v])=>[v,k]));
+// ===================== TRANSLATIONS =====================
+const T = {
+  uk: {
+    sub: "Чиста зарплатня за тиждень",
+    lblWeek: "Тиждень з (Нд)",
+    lblDriver: "Водій",
+    lblTruck: "Номер фури",
+    driverPlaceholder: "Ім'я прізвище",
+    btnReset: "Скинути тиждень",
+    btnReport: "📋 Звіт тижня",
+    lblTotal: "Net за тиждень",
+    totalHours: (h,d) => `${h} год · ${d} дн.`,
+    days: ["Неділя","Понеділок","Вівторок","Середа","Четвер","П'ятниця","Субота"],
+    fldDayType: "Тип дня",
+    fldHours: "Години",
+    fldADR: "ADR",
+    fldGenset: "Генсет",
+    fldSplitter: "Сплітер",
+    fldSamsara: "Самсара",
+    nightOut: "🌙 Ночівля поза домом",
+    nightIn: "🏠 Ночівля вдома (Night In)",
+    dayOpts: {
+      weekday: ["Будній","Святковий","Відпустка","Вихідний"],
+      sat:     ["Робочий","Святковий","Відпустка","Вихідний"],
+      sun:     ["Робоча","Відпустка","Вихідний"],
+    },
+    samsaraOpts: [["none","—"],["A","A · Зелена"],["B","B · Жовта"],["C","C · Червона"]],
+    daytypeMap: {"Будній":"weekday","Робочий":"saturday","Робоча":"sunday","Святковий":"bankholiday","Відпустка":"holiday","Вихідний":"off"},
+    daytypeLabel: {weekday:"Будній",saturday:"Субота (робочий)",sunday:"Неділя (робоча)",bankholiday:"Святковий",holiday:"Відпустка",off:"Вихідний"},
+    samsaraLabel: {none:"—",A:"A (Зелена)",B:"B (Жовта)",C:"C (Червона)"},
+    reportTitle: "ЗВІТ ТИЖНЯ — TRAMPER DRIVER",
+    reportWeek: "Тиждень з",
+    reportDriver: "Водій",
+    reportTruck: "Фура",
+    reportDayType: "Тип дня",
+    reportHours: "Години",
+    reportADR: "ADR",
+    reportGenset: "Генсет",
+    reportSplitter: "Сплітер",
+    reportSamsara: "Самсара",
+    reportNightOut: "Ночівля поза домом (Night Out)",
+    reportNightIn: "Ночівля вдома (Night In)",
+    reportNetPay: "NET PAY",
+    reportTotalDays: "РАЗОМ ДНІВ",
+    reportTotalHours: "РАЗОМ ГОДИН",
+    reportTotalNet: "РАЗОМ NET",
+    reportGenerated: "Сформовано",
+    locale: 'uk-UA',
+  },
+  en: {
+    sub: "Weekly net pay calculator",
+    lblWeek: "Week from (Sun)",
+    lblDriver: "Driver",
+    lblTruck: "Truck number",
+    driverPlaceholder: "Full name",
+    btnReset: "Reset week",
+    btnReport: "📋 Weekly report",
+    lblTotal: "Net this week",
+    totalHours: (h,d) => `${h} hrs · ${d} days`,
+    days: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
+    fldDayType: "Day type",
+    fldHours: "Hours",
+    fldADR: "ADR",
+    fldGenset: "Genset",
+    fldSplitter: "Splitter",
+    fldSamsara: "Samsara",
+    nightOut: "🌙 Night Out",
+    nightIn: "🏠 Night In",
+    dayOpts: {
+      weekday: ["Weekday","Bank Holiday","Holiday","Day Off"],
+      sat:     ["Working","Bank Holiday","Holiday","Day Off"],
+      sun:     ["Working","Holiday","Day Off"],
+    },
+    samsaraOpts: [["none","—"],["A","A · Green"],["B","B · Amber"],["C","C · Red"]],
+    daytypeMap: {"Weekday":"weekday","Working":"saturday","Bank Holiday":"bankholiday","Holiday":"holiday","Day Off":"off"},
+    daytypeLabel: {weekday:"Weekday",saturday:"Saturday (working)",sunday:"Sunday (working)",bankholiday:"Bank Holiday",holiday:"Holiday",off:"Day Off"},
+    samsaraLabel: {none:"—",A:"A (Green)",B:"B (Amber)",C:"C (Red)"},
+    reportTitle: "WEEKLY REPORT — TRAMPER DRIVER",
+    reportWeek: "Week from",
+    reportDriver: "Driver",
+    reportTruck: "Truck",
+    reportDayType: "Day type",
+    reportHours: "Hours",
+    reportADR: "ADR",
+    reportGenset: "Genset",
+    reportSplitter: "Splitter",
+    reportSamsara: "Samsara",
+    reportNightOut: "Night Out",
+    reportNightIn: "Night In",
+    reportNetPay: "NET PAY",
+    reportTotalDays: "TOTAL DAYS",
+    reportTotalHours: "TOTAL HOURS",
+    reportTotalNet: "TOTAL NET",
+    reportGenerated: "Generated",
+    locale: 'en-GB',
+  }
+};
 
+// "Working" in English maps to sat for sat row, sun for sun row — handled in listener by index
+
+let lang = "uk";
+const DAY_KEYS = ["sun","mon","tue","wed","thu","fri","sat"];
 let state = {};
+
+function t(){ return T[lang]; }
 
 function defaultDayState(i){
   return {dayType:(i>=1&&i<=5)?"weekday":"off",shiftType:"-",hours:"",adr:0,genset:0,splitter:0,samsara:"C",nightOut:false,nightIn:false};
 }
 function loadState(){ DAY_KEYS.forEach((k,i)=>{ state[k]=defaultDayState(i); }); }
 loadState();
-// Відновити збережений стан
 try {
   const saved = localStorage.getItem('tramperState');
   if(saved) state = JSON.parse(saved);
   const savedWeek = localStorage.getItem('tramperWeek');
   if(savedWeek) document.getElementById('weekStart').value = savedWeek;
-} catch(e){}
-try {
-  const d = localStorage.getItem('tramperDriver');
-  const t = localStorage.getItem('tramperTruck');
-  if(d) document.getElementById('driverName').value = d;
-  if(t) document.getElementById('truckNum').value = t;
+  const savedLang = localStorage.getItem('tramperLang');
+  if(savedLang) lang = savedLang;
 } catch(e){}
 
 function fmt(n){ return "£"+n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -139,20 +245,11 @@ function calcDay(d){
   } else if(d.dayType==="weekday"){
     base=RATES.basicDaily+RATES.mealAllowance+Math.max(0,hrs-11)*RATES.otStandard;
   } else if(d.dayType==="saturday"){
-    // звичайна субота: до 5г £12/год, >5г всі години £14/год, >10г +£10
-    if(hrs<=5){
-      base=hrs*RATES.satRunUp5;
-    } else {
-      base=hrs*RATES.satRunAfter5;
-    }
+    base = hrs<=5 ? hrs*RATES.satRunUp5 : hrs*RATES.satRunAfter5;
     if(hrs>10) base+=RATES.mealAllowance;
   } else {
-    // sunday / bankholiday — до 5г £14/год, >5г всі години £16/год, >10г +£10 meal
-    if(hrs<=5){
-      base=hrs*RATES.sunRunUp5;
-    } else {
-      base=hrs*RATES.sunRunAfter5;
-    }
+    // sunday / bankholiday
+    base = hrs<=5 ? hrs*RATES.sunRunUp5 : hrs*RATES.sunRunAfter5;
     if(hrs>10) base+=RATES.mealAllowance;
   }
   let bonuses=(d.adr||0)*RATES.adr+(d.genset||0)*RATES.genset+(d.splitter||0)*RATES.splitter;
@@ -164,99 +261,105 @@ function calcDay(d){
   return base+bonuses;
 }
 
+function getDayOpts(i){
+  if(i>=1&&i<=5) return t().dayOpts.weekday;
+  if(i===6) return t().dayOpts.sat;
+  return t().dayOpts.sun;
+}
+
+function mapDayType(label, i){
+  // "Working" in EN differs per day
+  if((label==="Working"||label==="Робочий")&&i===6) return "saturday";
+  if((label==="Working"||label==="Робоча")) return "sunday";
+  return t().daytypeMap[label] || "off";
+}
+
+function getDayTypeLabel(dayType, i){
+  // reverse map — find the option label for this dayType
+  const opts = getDayOpts(i);
+  const map = t().daytypeMap;
+  for(const opt of opts){
+    let mapped = map[opt];
+    if(!mapped){
+      if((opt==="Working"||opt==="Робочий")&&i===6) mapped="saturday";
+      else if(opt==="Working"||opt==="Робоча") mapped="sunday";
+    }
+    if(mapped===dayType) return opt;
+  }
+  return opts[0];
+}
+
 // ---- Build DOM once ----
 function buildDOM(){
   const container = document.getElementById('daysContainer');
   container.innerHTML = "";
   DAY_KEYS.forEach((key,i)=>{
     const d = state[key];
-    const isWeekend = i>=5;
+    const isWeekend = (i===0||i===6);
     const card = document.createElement('div');
     card.className = "daycard"+(isWeekend?" weekend":"");
     card.id = "card-"+key;
-    const weekdayOpts = ["Будній","Святковий","Відпустка","Вихідний"];
-    const satOpts = ["Робочий","Святковий","Відпустка","Вихідний"];
-    const sunOpts = ["Робоча","Відпустка","Вихідний"];
-    const opts = (i>=1&&i<=5) ? weekdayOpts : (i===6 ? satOpts : sunOpts);
+
+    const opts = getDayOpts(i);
+    const sOpts = t().samsaraOpts;
+
     card.innerHTML = `
       <div class="daycard-head">
         <div>
-          <div class="dayname">${DAYS[i]}</div>
+          <div class="dayname" id="dayname-${key}">${t().days[i]}</div>
           <div class="daydate" id="date-${key}"></div>
         </div>
         <div class="daypay zero" id="pay-${key}">£0.00</div>
       </div>
       <div class="field-row">
         <div class="field">
-          <label>Тип дня</label>
+          <label id="lbl-daytype-${key}">${t().fldDayType}</label>
           <select class="daytype" id="daytype-${key}">
             ${opts.map(o=>`<option value="${o}">${o}</option>`).join('')}
           </select>
         </div>
         <div class="field small" id="hoursfield-${key}">
-          <label>Години</label>
+          <label id="lbl-hours-${key}">${t().fldHours}</label>
           <input type="number" inputmode="decimal" min="0" max="24" step="0.5" placeholder="0" id="hours-${key}">
         </div>
       </div>
-      <div class="field-row shift-row" id="shiftrow-${key}">
-        <div class="field">
-          <label>Тип зміни (сб/нд)</label>
-          <select id="shift-${key}">
-            <option value="-">—</option>
-            <option value="runUp5">Заїзд/виїзд (до 5г)</option>
-            <option value="runAfter5">Заїзд/виїзд (понад 5г)</option>
-            <option value="fullShift">Повна зміна</option>
-          </select>
-        </div>
-      </div>
+      <div class="field-row shift-row" id="shiftrow-${key}" style="display:none;"></div>
       <div id="bonusblock-${key}">
         <div class="field-row">
           <div class="field small">
-            <label>ADR</label>
+            <label id="lbl-adr-${key}">${t().fldADR}</label>
             <input type="number" inputmode="numeric" min="0" max="10" placeholder="0" id="adr-${key}">
           </div>
           <div class="field small">
-            <label>Генсет</label>
+            <label id="lbl-genset-${key}">${t().fldGenset}</label>
             <input type="number" inputmode="numeric" min="0" max="10" placeholder="0" id="genset-${key}">
           </div>
           <div class="field small">
-            <label>Сплітер</label>
+            <label id="lbl-splitter-${key}">${t().fldSplitter}</label>
             <input type="number" inputmode="numeric" min="0" max="10" placeholder="0" id="splitter-${key}">
           </div>
           <div class="field">
-            <label>Самсара</label>
+            <label id="lbl-samsara-${key}">${t().fldSamsara}</label>
             <select id="samsara-${key}">
-              <option value="none">—</option>
-              <option value="A">A · Зелена</option>
-              <option value="B">B · Жовта</option>
-              <option value="C">C · Червона</option>
+              ${sOpts.map(([v,l])=>`<option value="${v}">${l}</option>`).join('')}
             </select>
           </div>
         </div>
         <div class="toggles">
-          <div class="toggle-btn" id="nightout-${key}" data-key="${key}" data-field="nightOut">🌙 Ночівля поза домом</div>
-          <div class="toggle-btn alt" id="nightin-${key}" data-key="${key}" data-field="nightIn">🏠 Ночівля вдома (Night In)</div>
+          <div class="toggle-btn" id="nightout-${key}" data-key="${key}" data-field="nightOut"></div>
+          <div class="toggle-btn alt" id="nightin-${key}" data-key="${key}" data-field="nightIn"></div>
         </div>
       </div>
     `;
     container.appendChild(card);
 
-    // Listeners — attach once, never re-attach
     document.getElementById('daytype-'+key).addEventListener('change', e=>{
-      let val = DAYTYPE_MAP[e.target.value];
-      // "Робочий" для суботи = saturday, для неділі = sunday
-      if(e.target.value === "Робочий") val = "saturday";
-      if(e.target.value === "Робоча") val = "sunday";
-      state[key].dayType = val;
-      applyVisibility(key);
+      state[key].dayType = mapDayType(e.target.value, i);
+      applyVisibility(key, i);
       updateTotals();
     });
     document.getElementById('hours-'+key).addEventListener('input', e=>{
       state[key].hours = e.target.value;
-      updateTotals();
-    });
-    document.getElementById('shift-'+key).addEventListener('change', e=>{
-      state[key].shiftType = e.target.value;
       updateTotals();
     });
     ['adr','genset','splitter'].forEach(f=>{
@@ -273,15 +376,78 @@ function buildDOM(){
       const id = (f==='nightOut'?'nightout':'nightin')+'-'+key;
       document.getElementById(id).addEventListener('click', ()=>{
         state[key][f] = !state[key][f];
-        const el = document.getElementById(id);
-        el.classList.toggle('active', state[key][f]);
+        document.getElementById(id).classList.toggle('active', state[key][f]);
         updateTotals();
       });
     });
   });
 }
 
-function applyVisibility(key){
+function applyLangLabels(){
+  // static labels
+  document.getElementById('subTitle').textContent = t().sub;
+  document.getElementById('lblWeek').textContent = t().lblWeek;
+  document.getElementById('lblDriver').textContent = t().lblDriver;
+  document.getElementById('lblTruck').textContent = t().lblTruck;
+  document.getElementById('driverName').placeholder = t().driverPlaceholder;
+  document.getElementById('btnReset').textContent = t().btnReset;
+  document.getElementById('btnReport').textContent = t().btnReport;
+  document.getElementById('lblTotal').textContent = t().lblTotal;
+  // lang buttons
+  document.querySelectorAll('.lang-btn').forEach(b=>{
+    b.classList.toggle('active', b.textContent.includes(lang==='uk'?'🇺🇦':'🇬🇧'));
+  });
+  // per-day labels
+  DAY_KEYS.forEach((key,i)=>{
+    const el = document.getElementById('dayname-'+key);
+    if(el) el.textContent = t().days[i];
+    const ldt = document.getElementById('lbl-daytype-'+key);
+    if(ldt) ldt.textContent = t().fldDayType;
+    const lh = document.getElementById('lbl-hours-'+key);
+    if(lh) lh.textContent = t().fldHours;
+    const la = document.getElementById('lbl-adr-'+key);
+    if(la) la.textContent = t().fldADR;
+    const lg = document.getElementById('lbl-genset-'+key);
+    if(lg) lg.textContent = t().fldGenset;
+    const ls = document.getElementById('lbl-splitter-'+key);
+    if(ls) ls.textContent = t().fldSplitter;
+    const lsa = document.getElementById('lbl-samsara-'+key);
+    if(lsa) lsa.textContent = t().fldSamsara;
+    // toggle buttons
+    const no = document.getElementById('nightout-'+key);
+    if(no) no.textContent = t().nightOut;
+    const ni = document.getElementById('nightin-'+key);
+    if(ni) ni.textContent = t().nightIn;
+    // samsara options
+    const sel = document.getElementById('samsara-'+key);
+    if(sel){
+      const cur = sel.value;
+      sel.innerHTML = t().samsaraOpts.map(([v,l])=>`<option value="${v}">${l}</option>`).join('');
+      sel.value = cur;
+    }
+    // daytype options
+    const dsel = document.getElementById('daytype-'+key);
+    if(dsel){
+      const curType = state[key].dayType;
+      const opts = getDayOpts(i);
+      dsel.innerHTML = opts.map(o=>`<option value="${o}">${o}</option>`).join('');
+      // restore selected
+      const lbl = getDayTypeLabel(curType, i);
+      dsel.value = lbl;
+    }
+  });
+}
+
+function setLang(l){
+  lang = l;
+  try{ localStorage.setItem('tramperLang', lang); } catch(e){}
+  applyLangLabels();
+  updateTotals();
+}
+
+function applyVisibility(key, i){
+  const idx = DAY_KEYS.indexOf(key);
+  const ii = i !== undefined ? i : idx;
   const d = state[key];
   const isOff = d.dayType==="off";
   const isWeekendType = ["saturday","sunday","bankholiday"].includes(d.dayType);
@@ -289,29 +455,30 @@ function applyVisibility(key){
   card.classList.toggle('off', isOff);
   card.classList.toggle('weekend', isWeekendType);
   document.getElementById('hoursfield-'+key).style.display = isOff?'none':'';
-  // shiftrow більше не потрібен — логіка автоматична
-  const shiftRow = document.getElementById('shiftrow-'+key);
-  if(shiftRow) shiftRow.style.display='none';
   document.getElementById('bonusblock-'+key).style.display = isOff?'none':'';
-  // sync select value
-  const dtLabel = DAYTYPE_RMAP[d.dayType];
-  if(dtLabel) document.getElementById('daytype-'+key).value = dtLabel;
+  // sync select
+  const lbl = getDayTypeLabel(d.dayType, ii);
+  const dsel = document.getElementById('daytype-'+key);
+  if(dsel) dsel.value = lbl;
+  // night toggle classes
+  const no = document.getElementById('nightout-'+key);
+  const ni = document.getElementById('nightin-'+key);
+  if(no) no.classList.toggle('active', d.nightOut);
+  if(ni) ni.classList.toggle('active', d.nightIn);
 }
 
 function syncValues(){
-  DAY_KEYS.forEach(key=>{
+  DAY_KEYS.forEach((key,i)=>{
     const d = state[key];
-    const dtLabel = DAYTYPE_RMAP[d.dayType];
-    if(dtLabel) document.getElementById('daytype-'+key).value = dtLabel;
     const hoursEl = document.getElementById('hours-'+key);
     if(hoursEl && document.activeElement !== hoursEl) hoursEl.value = d.hours;
-    document.getElementById('shift-'+key).value = d.shiftType;
     ['adr','genset','splitter'].forEach(f=>{
       const el = document.getElementById(f+'-'+key);
       if(el && document.activeElement !== el) el.value = d[f]||"";
     });
-    document.getElementById('samsara-'+key).value = d.samsara;
-    applyVisibility(key);
+    const sel = document.getElementById('samsara-'+key);
+    if(sel) sel.value = d.samsara;
+    applyVisibility(key, i);
   });
 }
 
@@ -323,7 +490,7 @@ function updateDates(){
     if(weekStart){
       const dt = new Date(weekStart);
       dt.setDate(dt.getDate()+i);
-      dateStr = dt.toLocaleDateString('uk-UA',{day:'2-digit',month:'2-digit'});
+      dateStr = dt.toLocaleDateString(t().locale,{day:'2-digit',month:'2-digit'});
     }
     document.getElementById('date-'+key).textContent = dateStr;
   });
@@ -350,18 +517,16 @@ function updateTotals(){
     totalHours += parseFloat(d.hours)||0;
     if(d.dayType!=="off") daysWorked++;
     const payEl = document.getElementById('pay-'+key);
-    payEl.textContent = fmt(pay);
-    payEl.className = "daypay"+(pay===0?" zero":"");
+    if(payEl){ payEl.textContent = fmt(pay); payEl.className = "daypay"+(pay===0?" zero":""); }
   });
   document.getElementById('totalPay').textContent = fmt(totalPay);
-  document.getElementById('totalHours').textContent = `${totalHours} год · ${daysWorked} дн.`;
+  document.getElementById('totalHours').textContent = t().totalHours(totalHours, daysWorked);
   saveState();
 }
 
 function resetWeek(){
   loadState();
   syncValues();
-  // скинути візуальний стан кнопок ночівлі
   DAY_KEYS.forEach(key=>{
     document.getElementById('nightout-'+key).classList.remove('active');
     document.getElementById('nightin-'+key).classList.remove('active');
@@ -372,78 +537,80 @@ function resetWeek(){
 document.getElementById('weekStart').addEventListener('change', updateDates);
 
 function generateReport(){
+  const tr = t();
   const weekVal = document.getElementById('weekStart').value;
   const weekStart = weekVal ? new Date(weekVal+"T00:00:00") : null;
-  const weekStr = weekStart ? weekStart.toLocaleDateString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric'}) : "—";
-
-  const DAYTYPE_LABEL = {
-    weekday:"Будній", saturday:"Субота (робочий)", sunday:"Неділя (робоча)",
-    bankholiday:"Святковий", holiday:"Відпустка", off:"Вихідний"
-  };
-  const SAMSARA_LABEL = {none:"—", A:"A (Зелена)", B:"B (Жовта)", C:"C (Червона)"};
+  const weekStr = weekStart ? weekStart.toLocaleDateString(tr.locale,{day:'2-digit',month:'2-digit',year:'numeric'}) : "—";
+  const driverName = document.getElementById('driverName').value || "—";
+  const truckNum = document.getElementById('truckNum').value || "—";
 
   let lines = [];
   lines.push("========================================");
-  lines.push("  ЗВІТ ТИЖНЯ — TRAMPER DRIVER");
-  const driverName = document.getElementById('driverName').value || "—";
-  const truckNum = document.getElementById('truckNum').value || "—";
-  lines.push("  Тиждень з: " + weekStr);
-  lines.push("  Водій:     " + driverName);
-  lines.push("  Фура:      " + truckNum);
+  lines.push("  "+tr.reportTitle);
+  lines.push("  "+tr.reportWeek+": "+weekStr);
+  lines.push("  "+tr.reportDriver+":     "+driverName);
+  lines.push("  "+tr.reportTruck+":      "+truckNum);
   lines.push("========================================");
   lines.push("");
 
-  let totalPay = 0, totalHours = 0, daysWorked = 0;
+  let totalPay=0, totalHours=0, daysWorked=0;
 
   DAY_KEYS.forEach((key,i)=>{
     const d = state[key];
     const pay = calcDay(d);
     const hrs = parseFloat(d.hours)||0;
-    const dateStr = weekStart ? (() => { const dt=new Date(weekStart); dt.setDate(dt.getDate()+i); return dt.toLocaleDateString('uk-UA',{day:'2-digit',month:'2-digit'}); })() : "";
+    const dateStr = weekStart ? (()=>{ const dt=new Date(weekStart); dt.setDate(dt.getDate()+i); return dt.toLocaleDateString(tr.locale,{day:'2-digit',month:'2-digit'}); })() : "";
 
     lines.push("----------------------------------------");
-    lines.push(DAYS[i] + (dateStr ? "  "+dateStr : ""));
-    lines.push("  Тип дня:    " + (DAYTYPE_LABEL[d.dayType]||d.dayType));
+    lines.push(tr.days[i]+(dateStr?"  "+dateStr:""));
+    lines.push("  "+tr.reportDayType+":    "+(tr.daytypeLabel[d.dayType]||d.dayType));
 
-    if(d.dayType !== "off"){
-      lines.push("  Години:     " + (hrs||0));
-      if(d.adr>0)      lines.push("  ADR:        " + d.adr + " × £20.00 = £" + (d.adr*20).toFixed(2));
-      if(d.genset>0)   lines.push("  Генсет:     " + d.genset + " × £12.00 = £" + (d.genset*12).toFixed(2));
-      if(d.splitter>0) lines.push("  Сплітер:    " + d.splitter + " × £16.00 = £" + (d.splitter*16).toFixed(2));
-      if(d.samsara!=="none") lines.push("  Самсара:    " + SAMSARA_LABEL[d.samsara]);
-      if(d.nightOut)   lines.push("  Ночівля:    Поза домом (Night Out) £26.20");
-      if(d.nightIn)    lines.push("  Ночівля:    Вдома (Night In) £16.00");
-      lines.push("  NET PAY:   £" + pay.toFixed(2));
-      totalHours += hrs;
-      daysWorked++;
+    if(d.dayType!=="off"){
+      lines.push("  "+tr.reportHours+":     "+hrs);
+      if(d.adr>0)      lines.push("  "+tr.reportADR+":        "+d.adr+" × £20.00 = £"+(d.adr*20).toFixed(2));
+      if(d.genset>0)   lines.push("  "+tr.reportGenset+":     "+d.genset+" × £12.00 = £"+(d.genset*12).toFixed(2));
+      if(d.splitter>0) lines.push("  "+tr.reportSplitter+":    "+d.splitter+" × £16.00 = £"+(d.splitter*16).toFixed(2));
+      if(d.samsara!=="none") lines.push("  "+tr.reportSamsara+":    "+tr.samsaraLabel[d.samsara]);
+      if(d.nightOut)   lines.push("  "+tr.reportNightOut+" £26.20");
+      if(d.nightIn)    lines.push("  "+tr.reportNightIn+" £16.00");
+      lines.push("  "+tr.reportNetPay+":   £"+pay.toFixed(2));
+      totalHours+=hrs; daysWorked++;
     } else {
-      lines.push("  NET PAY:   £0.00");
+      lines.push("  "+tr.reportNetPay+":   £0.00");
     }
-    totalPay += pay;
+    totalPay+=pay;
   });
 
   lines.push("========================================");
-  lines.push("  РАЗОМ ДНІВ:   " + daysWorked);
-  lines.push("  РАЗОМ ГОДИН:  " + totalHours);
-  lines.push("  РАЗОМ NET:    £" + totalPay.toFixed(2));
+  lines.push("  "+tr.reportTotalDays+":   "+daysWorked);
+  lines.push("  "+tr.reportTotalHours+":  "+totalHours);
+  lines.push("  "+tr.reportTotalNet+":    £"+totalPay.toFixed(2));
   lines.push("========================================");
   lines.push("");
-  lines.push("Сформовано: " + new Date().toLocaleDateString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}));
+  lines.push(tr.reportGenerated+": "+new Date().toLocaleDateString(tr.locale,{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}));
 
   const text = lines.join("\n");
-  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+  const blob = new Blob(["\uFEFF"+text],{type:"text/plain;charset=utf-8"});
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  const fname = weekVal ? "tramper_"+weekVal+".txt" : "tramper_report.txt";
-  a.download = fname;
+  a.href=url;
+  a.download = weekVal?"tramper_"+weekVal+".txt":"tramper_report.txt";
   a.click();
   URL.revokeObjectURL(url);
 }
 
-// Init
+// ---- Init ----
 buildDOM();
+// restore driver/truck
+try {
+  const d = localStorage.getItem('tramperDriver');
+  const tr = localStorage.getItem('tramperTruck');
+  if(d) document.getElementById('driverName').value = d;
+  if(tr) document.getElementById('truckNum').value = tr;
+} catch(e){}
+applyLangLabels();
 syncValues();
+updateDates();
 updateTotals();
 </script>
 </body>
