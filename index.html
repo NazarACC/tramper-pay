@@ -5,13 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>Tramper Pay</title>
 <style>
-  :root{<!DOCTYPE html>
-<html lang="uk">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<title>Tramper Pay</title>
-<style>
   :root{
     --bg:#0E1117; --panel:#171C26; --panel-2:#1E2430; --line:#2A3142;
     --amber:#FFB020; --green:#3DD68C; --text:#EDEFF4; --text-dim:#8B93A7;
@@ -69,12 +62,23 @@
     <label>Тиждень з (Пн)</label>
     <input type="date" id="weekStart">
   </div>
+  <div style="display:flex;gap:8px;margin-top:8px;">
+    <div style="flex:1;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 14px;">
+      <label style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:4px;">Водій</label>
+      <input type="text" id="driverName" placeholder="Ім'я прізвище" style="background:transparent;border:none;color:var(--text);font-size:15px;width:100%;font-family:inherit;" oninput="saveExtra()">
+    </div>
+    <div style="flex:1;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:10px 14px;">
+      <label style="font-size:11px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:4px;">Номер фури</label>
+      <input type="text" id="truckNum" placeholder="напр. AB12 CDE" style="background:transparent;border:none;color:var(--text);font-size:15px;width:100%;font-family:var(--mono);" oninput="saveExtra()">
+    </div>
+  </div>
 </div>
 
 <div class="container" id="daysContainer"></div>
 
 <div class="reset-row">
   <button onclick="resetWeek()">Скинути тиждень</button>
+  <button onclick="generateReport()" style="margin-left:10px;border-color:#FFB020;color:#FFB020;">📋 Звіт тижня</button>
 </div>
 
 <div class="summary">
@@ -116,6 +120,12 @@ try {
   if(saved) state = JSON.parse(saved);
   const savedWeek = localStorage.getItem('tramperWeek');
   if(savedWeek) document.getElementById('weekStart').value = savedWeek;
+} catch(e){}
+try {
+  const d = localStorage.getItem('tramperDriver');
+  const t = localStorage.getItem('tramperTruck');
+  if(d) document.getElementById('driverName').value = d;
+  if(t) document.getElementById('truckNum').value = t;
 } catch(e){}
 
 function fmt(n){ return "£"+n.toLocaleString('en-GB',{minimumFractionDigits:2,maximumFractionDigits:2}); }
@@ -319,6 +329,13 @@ function updateDates(){
   });
 }
 
+function saveExtra(){
+  try{
+    localStorage.setItem('tramperDriver', document.getElementById('driverName').value);
+    localStorage.setItem('tramperTruck', document.getElementById('truckNum').value);
+  } catch(e){}
+}
+
 function saveState(){
   try{ localStorage.setItem('tramperState', JSON.stringify(state)); } catch(e){}
   try{ localStorage.setItem('tramperWeek', document.getElementById('weekStart').value); } catch(e){}
@@ -344,10 +361,85 @@ function updateTotals(){
 function resetWeek(){
   loadState();
   syncValues();
+  // скинути візуальний стан кнопок ночівлі
+  DAY_KEYS.forEach(key=>{
+    document.getElementById('nightout-'+key).classList.remove('active');
+    document.getElementById('nightin-'+key).classList.remove('active');
+  });
   updateTotals();
 }
 
 document.getElementById('weekStart').addEventListener('change', updateDates);
+
+function generateReport(){
+  const weekVal = document.getElementById('weekStart').value;
+  const weekStart = weekVal ? new Date(weekVal+"T00:00:00") : null;
+  const weekStr = weekStart ? weekStart.toLocaleDateString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric'}) : "—";
+
+  const DAYTYPE_LABEL = {
+    weekday:"Будній", saturday:"Субота (робочий)", sunday:"Неділя (робоча)",
+    bankholiday:"Святковий", holiday:"Відпустка", off:"Вихідний"
+  };
+  const SAMSARA_LABEL = {none:"—", A:"A (Зелена)", B:"B (Жовта)", C:"C (Червона)"};
+
+  let lines = [];
+  lines.push("========================================");
+  lines.push("  ЗВІТ ТИЖНЯ — TRAMPER DRIVER");
+  const driverName = document.getElementById('driverName').value || "—";
+  const truckNum = document.getElementById('truckNum').value || "—";
+  lines.push("  Тиждень з: " + weekStr);
+  lines.push("  Водій:     " + driverName);
+  lines.push("  Фура:      " + truckNum);
+  lines.push("========================================");
+  lines.push("");
+
+  let totalPay = 0, totalHours = 0, daysWorked = 0;
+
+  DAY_KEYS.forEach((key,i)=>{
+    const d = state[key];
+    const pay = calcDay(d);
+    const hrs = parseFloat(d.hours)||0;
+    const dateStr = weekStart ? (() => { const dt=new Date(weekStart); dt.setDate(dt.getDate()+i); return dt.toLocaleDateString('uk-UA',{day:'2-digit',month:'2-digit'}); })() : "";
+
+    lines.push("----------------------------------------");
+    lines.push(DAYS[i] + (dateStr ? "  "+dateStr : ""));
+    lines.push("  Тип дня:    " + (DAYTYPE_LABEL[d.dayType]||d.dayType));
+
+    if(d.dayType !== "off"){
+      lines.push("  Години:     " + (hrs||0));
+      if(d.adr>0)      lines.push("  ADR:        " + d.adr + " × £20.00 = £" + (d.adr*20).toFixed(2));
+      if(d.genset>0)   lines.push("  Генсет:     " + d.genset + " × £12.00 = £" + (d.genset*12).toFixed(2));
+      if(d.splitter>0) lines.push("  Сплітер:    " + d.splitter + " × £16.00 = £" + (d.splitter*16).toFixed(2));
+      if(d.samsara!=="none") lines.push("  Самсара:    " + SAMSARA_LABEL[d.samsara]);
+      if(d.nightOut)   lines.push("  Ночівля:    Поза домом (Night Out) £26.20");
+      if(d.nightIn)    lines.push("  Ночівля:    Вдома (Night In) £16.00");
+      lines.push("  NET PAY:   £" + pay.toFixed(2));
+      totalHours += hrs;
+      daysWorked++;
+    } else {
+      lines.push("  NET PAY:   £0.00");
+    }
+    totalPay += pay;
+  });
+
+  lines.push("========================================");
+  lines.push("  РАЗОМ ДНІВ:   " + daysWorked);
+  lines.push("  РАЗОМ ГОДИН:  " + totalHours);
+  lines.push("  РАЗОМ NET:    £" + totalPay.toFixed(2));
+  lines.push("========================================");
+  lines.push("");
+  lines.push("Сформовано: " + new Date().toLocaleDateString('uk-UA',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}));
+
+  const text = lines.join("\n");
+  const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const fname = weekVal ? "tramper_"+weekVal+".txt" : "tramper_report.txt";
+  a.download = fname;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 // Init
 buildDOM();
