@@ -59,7 +59,7 @@
   <h1>Tramper Pay</h1>
   <div class="sub">Чиста зарплатня за тиждень</div>
   <div class="weekbar">
-    <label>Тиждень з (Пн)</label>
+    <label>Тиждень з (Нд)</label>
     <input type="date" id="weekStart">
   </div>
   <div style="display:flex;gap:8px;margin-top:8px;">
@@ -101,8 +101,8 @@ const RATES = {
   samsaraA:9.60, samsaraB:6.40, samsaraC:4.00
 };
 
-const DAYS = ["Понеділок","Вівторок","Середа","Четвер","П'ятниця","Субота","Неділя"];
-const DAY_KEYS = ["mon","tue","wed","thu","fri","sat","sun"];
+const DAYS = ["Неділя","Понеділок","Вівторок","Середа","Четвер","П'ятниця","Субота"];
+const DAY_KEYS = ["sun","mon","tue","wed","thu","fri","sat"];
 const DAYTYPE_OPTIONS = ["Будній","Субота","Неділя","Святковий","Відпустка","Вихідний"];
 const DAYTYPE_MAP = {"Будній":"weekday","Субота":"saturday","Неділя":"sunday","Робочий":"saturday","Робоча":"sunday","Святковий":"bankholiday","Відпустка":"holiday","Вихідний":"off"};
 const DAYTYPE_RMAP = Object.fromEntries(Object.entries(DAYTYPE_MAP).map(([k,v])=>[v,k]));
@@ -110,7 +110,7 @@ const DAYTYPE_RMAP = Object.fromEntries(Object.entries(DAYTYPE_MAP).map(([k,v])=
 let state = {};
 
 function defaultDayState(i){
-  return {dayType:i<5?"weekday":"off",shiftType:"-",hours:"",adr:0,genset:0,splitter:0,samsara:"C",nightOut:false,nightIn:false};
+  return {dayType:(i>=1&&i<=5)?"weekday":"off",shiftType:"-",hours:"",adr:0,genset:0,splitter:0,samsara:"C",nightOut:false,nightIn:false};
 }
 function loadState(){ DAY_KEYS.forEach((k,i)=>{ state[k]=defaultDayState(i); }); }
 loadState();
@@ -177,7 +177,7 @@ function buildDOM(){
     const weekdayOpts = ["Будній","Святковий","Відпустка","Вихідний"];
     const satOpts = ["Робочий","Святковий","Відпустка","Вихідний"];
     const sunOpts = ["Робоча","Відпустка","Вихідний"];
-    const opts = i < 5 ? weekdayOpts : (i === 5 ? satOpts : sunOpts);
+    const opts = (i>=1&&i<=5) ? weekdayOpts : (i===6 ? satOpts : sunOpts);
     card.innerHTML = `
       <div class="daycard-head">
         <div>
@@ -448,3 +448,4 @@ updateTotals();
 </script>
 </body>
 </html>
+
