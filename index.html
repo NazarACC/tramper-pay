@@ -61,6 +61,17 @@
   .shift-row{display:none;}
   .shift-row.visible{display:flex;}
   ::placeholder{color:#4B5468;}
+  .tax-panel{max-width:560px;margin:0 auto 0 auto;padding:0 12px 16px;}
+  .tax-card{background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;}
+  .tax-card-title{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--text-dim);padding:14px 16px 8px;font-weight:700;}
+  .tax-row{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-top:1px solid var(--line);}
+  .tax-row .tl{font-size:13px;color:var(--text-dim);}
+  .tax-row .tv{font-family:var(--mono);font-size:14px;font-weight:600;}
+  .tax-row.gross .tv{color:var(--text);}
+  .tax-row.deduct .tv{color:#FF5C5C;}
+  .tax-row.net .tl{color:var(--text);font-weight:700;}
+  .tax-row.net .tv{color:var(--amber);font-size:16px;}
+  .tax-sub{font-size:11px;color:var(--text-dim);padding:2px 16px 10px;line-height:1.5;}
 </style>
 </head>
 <body>
@@ -97,6 +108,41 @@
 <div class="reset-row">
   <button onclick="resetWeek()" id="btnReset"></button>
   <button onclick="generateReport()" id="btnReport" style="margin-left:10px;border-color:#FFB020;color:#FFB020;"></button>
+</div>
+
+<div class="tax-panel" id="taxPanel">
+  <div class="tax-card">
+    <div class="tax-card-title" id="taxTitle"></div>
+    <div class="tax-row gross">
+      <span class="tl" id="taxLblGross"></span>
+      <span class="tv" id="taxGross">£0.00</span>
+    </div>
+    <div class="tax-row">
+      <span class="tl" id="taxLblAllowance"></span>
+      <span class="tv" style="color:var(--green)" id="taxAllowance">£0.00</span>
+    </div>
+    <div class="tax-row deduct">
+      <span class="tl" id="taxLblIT20"></span>
+      <span class="tv" id="taxIT20">£0.00</span>
+    </div>
+    <div class="tax-row deduct" id="taxIT40row">
+      <span class="tl" id="taxLblIT40"></span>
+      <span class="tv" id="taxIT40">£0.00</span>
+    </div>
+    <div class="tax-row deduct">
+      <span class="tl" id="taxLblNI6"></span>
+      <span class="tv" id="taxNI6">£0.00</span>
+    </div>
+    <div class="tax-row deduct" id="taxNI1row">
+      <span class="tl" id="taxLblNI1"></span>
+      <span class="tv" id="taxNI1">£0.00</span>
+    </div>
+    <div class="tax-row net">
+      <span class="tl" id="taxLblTakeHome"></span>
+      <span class="tv" id="taxTakeHome">£0.00</span>
+    </div>
+    <div class="tax-sub" id="taxNote"></div>
+  </div>
 </div>
 
 <div class="summary">
@@ -502,6 +548,124 @@ function updateDates(){
   });
 }
 
+// ===================== HMRC TAX CALC =====================
+// Gross = employer gross (net / 0.8 for taxable, or actual gross from rates)
+// We store net rates. To get gross: taxable items gross = net/0.8, tax-free = net
+// Simpler: use the gross column from rates directly
+// Gross rates: basicDaily=154, meal=10(tax-free), otStd=15, sat rates gross, sun rates gross etc.
+// We'll compute gross from net: taxable net = gross*0.8 => gross = net/0.8
+// Tax-free items: nightOut=26.20, meal=10 stay as-is (no tax)
+// Actually employer already deducted 20% flat. HMRC recalculates on total gross with bands.
+// So: gross = sum of (taxable_net / 0.8) + tax_free items
+// Then apply HMRC bands on gross
+
+const GROSS_RATES = {
+  basicDaily: 154.00,
+  otStandard: 15.00,
+  satRunUp5: 15.00,
+  satRunAfter5: 17.50,
+  sunRunUp5: 17.50,
+  sunRunAfter5: 20.00,
+  splitter: 20.00,
+  adr: 25.00,
+  genset: 15.00,
+  samsaraA: 12.00,
+  samsaraB: 8.00,
+  samsaraC: 5.00,
+  holiday: 154.00,
+  nightIn: 20.00,
+  // tax-free:
+  mealAllowance: 10.00,
+  nightOut: 26.20,
+};
+
+function calcDayGross(d){
+  if(d.dayType==="off") return {taxable:0, taxFree:0};
+  let taxable=0, taxFree=0;
+  const hrs=parseFloat(d.hours)||0;
+
+  if(d.dayType==="holiday"){
+    taxable += GROSS_RATES.holiday;
+  } else if(d.dayType==="weekday"){
+    taxable += GROSS_RATES.basicDaily;
+    taxFree += GROSS_RATES.mealAllowance; // meal is tax-free
+    taxable += Math.max(0, hrs-11)*GROSS_RATES.otStandard;
+  } else if(d.dayType==="saturday"){
+    taxable += hrs<=5 ? hrs*GROSS_RATES.satRunUp5 : hrs*GROSS_RATES.satRunAfter5;
+    if(hrs>10) taxFree += GROSS_RATES.mealAllowance;
+  } else {
+    taxable += hrs<=5 ? hrs*GROSS_RATES.sunRunUp5 : hrs*GROSS_RATES.sunRunAfter5;
+    if(hrs>10) taxFree += GROSS_RATES.mealAllowance;
+  }
+
+  taxable += (d.adr||0)*GROSS_RATES.adr;
+  taxable += (d.genset||0)*GROSS_RATES.genset;
+  taxable += (d.splitter||0)*GROSS_RATES.splitter;
+  if(d.samsara==="A") taxable += GROSS_RATES.samsaraA;
+  else if(d.samsara==="B") taxable += GROSS_RATES.samsaraB;
+  else if(d.samsara==="C") taxable += GROSS_RATES.samsaraC;
+
+  taxFree += d.nightOut ? GROSS_RATES.nightOut : 0;
+  taxable += d.nightIn ? GROSS_RATES.nightIn : 0;
+
+  return {taxable, taxFree};
+}
+
+function calcHMRC(grossTaxable){
+  // Weekly thresholds 2024/25 (based on £12,570 PA / 52)
+  const allowance = 242;   // tax-free per week
+  const basic_limit = 967; // 20% band up to here
+  const higher = 967;      // 40% above this
+
+  // Income Tax
+  let it20=0, it40=0;
+  const taxable = Math.max(0, grossTaxable - allowance);
+  const in20band = Math.min(taxable, higher - allowance);
+  it20 = in20band * 0.20;
+  const in40band = Math.max(0, grossTaxable - higher);
+  it40 = in40band * 0.40;
+
+  // NI (employee)
+  let ni6=0, ni1=0;
+  const ni_taxable = Math.max(0, grossTaxable - allowance);
+  const ni_in6band = Math.min(ni_taxable, higher - allowance);
+  ni6 = ni_in6band * 0.06;
+  const ni_in1band = Math.max(0, grossTaxable - higher);
+  ni1 = ni_in1band * 0.01;
+
+  const totalTax = it20 + it40 + ni6 + ni1;
+  const takeHome = grossTaxable - totalTax;
+
+  return {grossTaxable, allowance: Math.min(grossTaxable, allowance), it20, it40, ni6, ni1, totalTax, takeHome};
+}
+
+function updateTaxPanel(grossTaxable, taxFree){
+  const r = calcHMRC(grossTaxable);
+  const tr = t();
+
+  document.getElementById('taxTitle').textContent = tr.taxTitle;
+  document.getElementById('taxLblGross').textContent = tr.taxLblGross;
+  document.getElementById('taxLblAllowance').textContent = tr.taxLblAllowance;
+  document.getElementById('taxLblIT20').textContent = tr.taxLblIT20;
+  document.getElementById('taxLblIT40').textContent = tr.taxLblIT40;
+  document.getElementById('taxLblNI6').textContent = tr.taxLblNI6;
+  document.getElementById('taxLblNI1').textContent = tr.taxLblNI1;
+  document.getElementById('taxLblTakeHome').textContent = tr.taxLblTakeHome;
+  document.getElementById('taxNote').textContent = tr.taxNote;
+
+  document.getElementById('taxGross').textContent = fmt(grossTaxable + taxFree);
+  document.getElementById('taxAllowance').textContent = fmt(r.allowance + taxFree);
+  document.getElementById('taxIT20').textContent = '-'+fmt(r.it20);
+  document.getElementById('taxIT40').textContent = '-'+fmt(r.it40);
+  document.getElementById('taxNI6').textContent = '-'+fmt(r.ni6);
+  document.getElementById('taxNI1').textContent = '-'+fmt(r.ni1);
+  document.getElementById('taxTakeHome').textContent = fmt(r.takeHome + taxFree);
+
+  // hide 40% and NI 1% rows if zero
+  document.getElementById('taxIT40row').style.display = r.it40>0 ? '' : 'none';
+  document.getElementById('taxNI1row').style.display = r.ni1>0 ? '' : 'none';
+}
+
 function saveExtra(){
   try{
     localStorage.setItem('tramperDriver', document.getElementById('driverName').value);
@@ -516,17 +680,22 @@ function saveState(){
 
 function updateTotals(){
   let totalPay=0, totalHours=0, daysWorked=0;
+  let totalGrossTaxable=0, totalTaxFree=0;
   DAY_KEYS.forEach(key=>{
     const d = state[key];
     const pay = calcDay(d);
     totalPay += pay;
     totalHours += parseFloat(d.hours)||0;
     if(d.dayType!=="off") daysWorked++;
+    const {taxable, taxFree} = calcDayGross(d);
+    totalGrossTaxable += taxable;
+    totalTaxFree += taxFree;
     const payEl = document.getElementById('pay-'+key);
     if(payEl){ payEl.textContent = fmt(pay); payEl.className = "daypay"+(pay===0?" zero":""); }
   });
   document.getElementById('totalPay').textContent = fmt(totalPay);
   document.getElementById('totalHours').textContent = t().totalHours(totalHours, daysWorked);
+  updateTaxPanel(totalGrossTaxable, totalTaxFree);
   saveState();
 }
 
@@ -560,10 +729,13 @@ function generateReport(){
   lines.push("");
 
   let totalPay=0, totalHours=0, daysWorked=0;
+  let totalGrossTaxable=0, totalTaxFree=0;
 
   DAY_KEYS.forEach((key,i)=>{
     const d = state[key];
     const pay = calcDay(d);
+    const {taxable:dgt, taxFree:dtf} = calcDayGross(d);
+    totalGrossTaxable+=dgt; totalTaxFree+=dtf;
     const hrs = parseFloat(d.hours)||0;
     const dateStr = weekStart ? (()=>{ const dt=new Date(weekStart); dt.setDate(dt.getDate()+i); return dt.toLocaleDateString(tr.locale,{day:'2-digit',month:'2-digit'}); })() : "";
 
@@ -593,6 +765,29 @@ function generateReport(){
   lines.push("  "+tr.reportTotalNet+":    £"+totalPay.toFixed(2));
   lines.push("========================================");
   lines.push("");
+  // HMRC section
+  const hmrc = calcHMRC(totalGrossTaxable);
+  const totalGross = totalGrossTaxable + totalTaxFree;
+  lines.push("");
+  lines.push("========================================");
+  lines.push("  HMRC — "+tr.taxTitle);
+  lines.push("========================================");
+  lines.push("  "+tr.rptGross.padEnd(28)+" £"+totalGross.toFixed(2));
+  lines.push("    "+tr.taxLblAllowance.padEnd(26)+" £"+(hmrc.allowance+totalTaxFree).toFixed(2));
+  lines.push("  --- Income Tax ---");
+  lines.push("    "+tr.rptIT20.padEnd(26)+" -£"+hmrc.it20.toFixed(2));
+  if(hmrc.it40>0)
+    lines.push("    "+tr.rptIT40.padEnd(26)+" -£"+hmrc.it40.toFixed(2));
+  lines.push("  --- National Insurance ---");
+  lines.push("    "+tr.rptNI6.padEnd(26)+" -£"+hmrc.ni6.toFixed(2));
+  if(hmrc.ni1>0)
+    lines.push("    "+tr.rptNI1.padEnd(26)+" -£"+hmrc.ni1.toFixed(2));
+  lines.push("----------------------------------------");
+  lines.push("  "+tr.rptTakeHome.padEnd(28)+" £"+(hmrc.takeHome+totalTaxFree).toFixed(2));
+  lines.push("========================================");
+  lines.push("  * "+tr.taxNote);
+  lines.push("");
+
   lines.push(tr.reportGenerated+": "+new Date().toLocaleDateString(tr.locale,{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}));
 
   const text = lines.join("\n");
