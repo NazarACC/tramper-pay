@@ -131,6 +131,10 @@
       <span class="tl" id="taxLblAllowance"></span>
       <span class="tv" style="color:var(--green)" id="taxAllowance">£0.00</span>
     </div>
+    <div class="tax-row" id="taxFreeRow">
+      <span class="tl" id="taxLblTaxFree"></span>
+      <span class="tv" style="color:var(--green)" id="taxFreeVal">£0.00</span>
+    </div>
     <div class="tax-row deduct">
       <span class="tl" id="taxLblIT20"></span>
       <span class="tv" id="taxIT20">£0.00</span>
@@ -218,6 +222,7 @@ const T = {
     taxTitle: "HMRC — Оподаткування тижня",
     taxLblGross: "Загальний Gross (до вирахувань)",
     taxLblAllowance: "Неоподатковувана частка (£242/тиж)",
+    taxLblTaxFree: "Tax-free доплати (meal, night out)",
     taxLblIT20: "Income Tax 20% (£242–£967)",
     taxLblIT40: "Income Tax 40% (понад £967)",
     taxLblNI6: "National Insurance 6% (£242–£967)",
@@ -281,6 +286,7 @@ const T = {
     taxTitle: "HMRC — Weekly Tax Breakdown",
     taxLblGross: "Total Gross (before deductions)",
     taxLblAllowance: "Tax-free allowance (£242/wk)",
+    taxLblTaxFree: "Tax-free items (meal, night out)",
     taxLblIT20: "Income Tax 20% (£242–£967)",
     taxLblIT40: "Income Tax 40% (over £967)",
     taxLblNI6: "National Insurance 6% (£242–£967)",
@@ -479,6 +485,7 @@ function applyTaxLabels(){
   document.getElementById('taxLblNI6').textContent = tr.taxLblNI6;
   document.getElementById('taxLblNI1').textContent = tr.taxLblNI1;
   document.getElementById('taxLblTakeHome').textContent = tr.taxLblTakeHome;
+  document.getElementById('taxLblTaxFree').textContent = tr.taxLblTaxFree;
   document.getElementById('taxNote').textContent = tr.taxNote;
 }
 
@@ -692,7 +699,14 @@ function updateTaxPanel(grossTaxable, taxFree, totalHours_ref=0, daysWorked_ref=
   const tr = t();
 
   document.getElementById('taxGross').textContent = fmt(grossTaxable + taxFree);
-  document.getElementById('taxAllowance').textContent = fmt(r.allowance + taxFree);
+  const taxFreeRow = document.getElementById('taxFreeRow');
+  if(taxFree>0){
+    taxFreeRow.style.display='';
+    document.getElementById('taxFreeVal').textContent = fmt(taxFree);
+  } else {
+    taxFreeRow.style.display='none';
+  }
+  document.getElementById('taxAllowance').textContent = fmt(r.allowance);
   document.getElementById('taxIT20').textContent = '-'+fmt(r.it20);
   document.getElementById('taxIT40').textContent = '-'+fmt(r.it40);
   document.getElementById('taxNI6').textContent = '-'+fmt(r.ni6);
@@ -813,7 +827,7 @@ function generateReport(){
   lines.push("  HMRC — "+tr.taxTitle);
   lines.push("========================================");
   lines.push("  "+tr.rptGross.padEnd(28)+" £"+totalGross.toFixed(2));
-  lines.push("    "+tr.taxLblAllowance.padEnd(26)+" £"+(hmrc.allowance+totalTaxFree).toFixed(2));
+  lines.push("    "+tr.taxLblAllowance.padEnd(26)+" £"+hmrc.allowance.toFixed(2));
   lines.push("  --- Income Tax ---");
   lines.push("    "+tr.rptIT20.padEnd(26)+" -£"+hmrc.it20.toFixed(2));
   if(hmrc.it40>0)
