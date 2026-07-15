@@ -18,7 +18,7 @@
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
   html,body{margin:0;padding:0;}
-  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding-bottom:140px;min-height:100vh;}
+  body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;padding-bottom:30px;min-height:100vh;}
   .topbar{position:sticky;top:0;z-index:20;background:linear-gradient(180deg,var(--bg) 80%,transparent);padding:18px 16px 10px;}
   .topbar h1{font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--amber);margin:0 0 2px;font-weight:700;}
   .topbar .sub{font-size:12px;color:var(--text-dim);}
@@ -110,6 +110,16 @@
   <button onclick="generateReport()" id="btnReport" style="margin-left:10px;border-color:#FFB020;color:#FFB020;"></button>
 </div>
 
+<div class="summary">
+  <div class="summary-card">
+    <div class="summary-left">
+      <div class="lbl" id="lblTotal"></div>
+      <div class="hrs" id="totalHours"></div>
+    </div>
+    <div class="summary-right" id="totalPay">£0.00</div>
+  </div>
+</div>
+
 <div class="tax-panel" id="taxPanel">
   <div class="tax-card">
     <div class="tax-card-title" id="taxTitle"></div>
@@ -145,15 +155,7 @@
   </div>
 </div>
 
-<div class="summary">
-  <div class="summary-card">
-    <div class="summary-left">
-      <div class="lbl" id="lblTotal"></div>
-      <div class="hrs" id="totalHours"></div>
-    </div>
-    <div class="summary-right" id="totalPay">£0.00</div>
-  </div>
-</div>
+
 
 <script>
 // ===================== RATES =====================
@@ -213,6 +215,22 @@ const T = {
     reportTotalHours: "РАЗОМ ГОДИН",
     reportTotalNet: "РАЗОМ NET",
     reportGenerated: "Сформовано",
+    taxTitle: "HMRC — Оподаткування тижня",
+    taxLblGross: "Загальний Gross (до вирахувань)",
+    taxLblAllowance: "Неоподатковувана частка (£242/тиж)",
+    taxLblIT20: "Income Tax 20% (£242–£967)",
+    taxLblIT40: "Income Tax 40% (понад £967)",
+    taxLblNI6: "National Insurance 6% (£242–£967)",
+    taxLblNI1: "National Insurance 1% (понад £967)",
+    taxLblTakeHome: "Реальний Take-Home",
+    taxNote: "* Орієнтовний розрахунок PAYE (код 1257L). Точні цифри — у роботодавця.",
+    rptGross: "GROSS (до вирахувань)",
+    rptAllowance: "Неоподатков. частка",
+    rptIT20: "Income Tax 20%",
+    rptIT40: "Income Tax 40%",
+    rptNI6: "NI 6%",
+    rptNI1: "NI 1%",
+    rptTakeHome: "РЕАЛЬНИЙ TAKE-HOME",
     locale: 'uk-UA',
   },
   en: {
@@ -260,6 +278,22 @@ const T = {
     reportTotalHours: "TOTAL HOURS",
     reportTotalNet: "TOTAL NET",
     reportGenerated: "Generated",
+    taxTitle: "HMRC — Weekly Tax Breakdown",
+    taxLblGross: "Total Gross (before deductions)",
+    taxLblAllowance: "Tax-free allowance (£242/wk)",
+    taxLblIT20: "Income Tax 20% (£242–£967)",
+    taxLblIT40: "Income Tax 40% (over £967)",
+    taxLblNI6: "National Insurance 6% (£242–£967)",
+    taxLblNI1: "National Insurance 1% (over £967)",
+    taxLblTakeHome: "Actual Take-Home",
+    taxNote: "* Estimated PAYE (tax code 1257L). Exact figures are set by your employer.",
+    rptGross: "GROSS (before deductions)",
+    rptAllowance: "Tax-free allowance",
+    rptIT20: "Income Tax 20%",
+    rptIT40: "Income Tax 40%",
+    rptNI6: "NI 6%",
+    rptNI1: "NI 1%",
+    rptTakeHome: "ACTUAL TAKE-HOME",
     locale: 'en-GB',
   }
 };
@@ -435,6 +469,19 @@ function buildDOM(){
   });
 }
 
+function applyTaxLabels(){
+  const tr = t();
+  document.getElementById('taxTitle').textContent = tr.taxTitle;
+  document.getElementById('taxLblGross').textContent = tr.taxLblGross;
+  document.getElementById('taxLblAllowance').textContent = tr.taxLblAllowance;
+  document.getElementById('taxLblIT20').textContent = tr.taxLblIT20;
+  document.getElementById('taxLblIT40').textContent = tr.taxLblIT40;
+  document.getElementById('taxLblNI6').textContent = tr.taxLblNI6;
+  document.getElementById('taxLblNI1').textContent = tr.taxLblNI1;
+  document.getElementById('taxLblTakeHome').textContent = tr.taxLblTakeHome;
+  document.getElementById('taxNote').textContent = tr.taxNote;
+}
+
 function applyLangLabels(){
   // static labels
   document.getElementById('subTitle').textContent = t().sub;
@@ -442,9 +489,10 @@ function applyLangLabels(){
   document.getElementById('lblDriver').textContent = t().lblDriver;
   document.getElementById('lblTruck').textContent = t().lblTruck;
   document.getElementById('driverName').placeholder = t().driverPlaceholder;
+  document.getElementById('lblTotal').textContent = t().lblTotal;
   document.getElementById('btnReset').textContent = t().btnReset;
   document.getElementById('btnReport').textContent = t().btnReport;
-  document.getElementById('lblTotal').textContent = t().lblTotal;
+  applyTaxLabels();
   // lang buttons
   document.querySelectorAll('.lang-btn').forEach(b=>{
     b.classList.toggle('active', b.textContent.includes(lang==='uk'?'🇺🇦':'🇬🇧'));
@@ -639,19 +687,9 @@ function calcHMRC(grossTaxable){
   return {grossTaxable, allowance: Math.min(grossTaxable, allowance), it20, it40, ni6, ni1, totalTax, takeHome};
 }
 
-function updateTaxPanel(grossTaxable, taxFree){
+function updateTaxPanel(grossTaxable, taxFree, totalHours_ref=0, daysWorked_ref=0){
   const r = calcHMRC(grossTaxable);
   const tr = t();
-
-  document.getElementById('taxTitle').textContent = tr.taxTitle;
-  document.getElementById('taxLblGross').textContent = tr.taxLblGross;
-  document.getElementById('taxLblAllowance').textContent = tr.taxLblAllowance;
-  document.getElementById('taxLblIT20').textContent = tr.taxLblIT20;
-  document.getElementById('taxLblIT40').textContent = tr.taxLblIT40;
-  document.getElementById('taxLblNI6').textContent = tr.taxLblNI6;
-  document.getElementById('taxLblNI1').textContent = tr.taxLblNI1;
-  document.getElementById('taxLblTakeHome').textContent = tr.taxLblTakeHome;
-  document.getElementById('taxNote').textContent = tr.taxNote;
 
   document.getElementById('taxGross').textContent = fmt(grossTaxable + taxFree);
   document.getElementById('taxAllowance').textContent = fmt(r.allowance + taxFree);
@@ -659,7 +697,11 @@ function updateTaxPanel(grossTaxable, taxFree){
   document.getElementById('taxIT40').textContent = '-'+fmt(r.it40);
   document.getElementById('taxNI6').textContent = '-'+fmt(r.ni6);
   document.getElementById('taxNI1').textContent = '-'+fmt(r.ni1);
-  document.getElementById('taxTakeHome').textContent = fmt(r.takeHome + taxFree);
+  const takeHomeTotal = r.takeHome + taxFree;
+  document.getElementById('taxTakeHome').textContent = fmt(takeHomeTotal);
+  // оновити головну summary панель
+  document.getElementById('totalPay').textContent = fmt(takeHomeTotal);
+  document.getElementById('totalHours').textContent = t().totalHours(totalHours_ref, daysWorked_ref);
 
   // hide 40% and NI 1% rows if zero
   document.getElementById('taxIT40row').style.display = r.it40>0 ? '' : 'none';
@@ -693,9 +735,7 @@ function updateTotals(){
     const payEl = document.getElementById('pay-'+key);
     if(payEl){ payEl.textContent = fmt(pay); payEl.className = "daypay"+(pay===0?" zero":""); }
   });
-  document.getElementById('totalPay').textContent = fmt(totalPay);
-  document.getElementById('totalHours').textContent = t().totalHours(totalHours, daysWorked);
-  updateTaxPanel(totalGrossTaxable, totalTaxFree);
+  updateTaxPanel(totalGrossTaxable, totalTaxFree, totalHours, daysWorked);
   saveState();
 }
 
