@@ -912,8 +912,7 @@ function generatePayslip(){
 
   const hmrc = calcHMRC(totalGrossTaxable);
   const totalGross = totalGrossTaxable + totalTaxFree;
-  const pension = totalGross * 0.03; // ~3% estimate
-  const totalDeductions = hmrc.it20 + hmrc.it40 + hmrc.ni6 + hmrc.ni1 + pension;
+  const totalDeductions = hmrc.it20 + hmrc.it40 + hmrc.ni6 + hmrc.ni1;
   const netPay = totalGross - totalDeductions;
 
   // Format helpers
@@ -946,7 +945,7 @@ function generatePayslip(){
   if(totalOTPay>0)     lines.push(col('Overtime', totalOTHours.toFixed(1), '15.00', totalOTPay.toFixed(2)));
   if(totalSatPay>0)    lines.push(col('Saturday Hours', '', '', totalSatPay.toFixed(2)));
   if(totalSunPay>0)    lines.push(col('Sun/BH Hours', '', '', totalSunPay.toFixed(2)));
-  if(totalSamsara>0)   lines.push(col('Performance Bonus', '', '', totalSamsara.toFixed(2)));
+  if(totalSamsara>0)   lines.push(col('Performance Bonus (Samsara)', '', '', totalSamsara.toFixed(2)));
   if(totalADR>0)       lines.push(col('ADR Bonus', '', '', totalADR.toFixed(2)));
   if(totalGenset>0)    lines.push(col('Genset Bonus', '', '', totalGenset.toFixed(2)));
   if(totalSplitter>0)  lines.push(col('Splitter Bonus', '', '', totalSplitter.toFixed(2)));
@@ -963,7 +962,6 @@ function generatePayslip(){
   lines.push(line);
   lines.push(col('PAYE tax','','',( hmrc.it20+hmrc.it40).toFixed(2)));
   lines.push(col('National Insurance','','',( hmrc.ni6+hmrc.ni1).toFixed(2)));
-  lines.push(col('Pension (~3%)','','',pension.toFixed(2)));
   lines.push(line);
   lines.push(col('Total Deductions','','',totalDeductions.toFixed(2)));
   lines.push('');
@@ -971,7 +969,7 @@ function generatePayslip(){
   lines.push(col('NET PAY','','','£'+netPay.toFixed(2)));
   lines.push(dline);
   lines.push('');
-  lines.push('* PAYE estimated (tax code 1257L). Pension estimate ~3%. Exact figures on official payslip.');
+  lines.push('* PAYE estimated (tax code 1257L). Exact figures on official payslip.');
   lines.push('Generated: '+new Date().toLocaleDateString(tr.locale,{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}));
 
   const text = lines.join('\n');
