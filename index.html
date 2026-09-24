@@ -108,6 +108,7 @@
 <div class="reset-row">
   <button onclick="resetWeek()" id="btnReset"></button>
   <button onclick="generateReport()" id="btnReport" style="margin-left:10px;border-color:#FFB020;color:#FFB020;"></button>
+  <button onclick="generatePayslip()" id="btnPayslip" style="margin-left:10px;border-color:#3DD68C;color:#3DD68C;"></button>
 </div>
 
 <div class="summary">
@@ -182,6 +183,7 @@ const T = {
     driverPlaceholder: "Ім'я прізвище",
     btnReset: "Скинути тиждень",
     btnReport: "📋 Звіт тижня",
+    btnPayslip: "📄 Payslip",
     lblTotal: "Net за тиждень",
     totalHours: (h,d) => `${h} год · ${d} дн.`,
     days: ["Неділя","Понеділок","Вівторок","Середа","Четвер","П'ятниця","Субота"],
@@ -246,6 +248,7 @@ const T = {
     driverPlaceholder: "Full name",
     btnReset: "Reset week",
     btnReport: "📋 Weekly report",
+    btnPayslip: "📄 Payslip",
     lblTotal: "Net this week",
     totalHours: (h,d) => `${h} hrs · ${d} days`,
     days: ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"],
@@ -499,6 +502,7 @@ function applyLangLabels(){
   document.getElementById('lblTotal').textContent = t().lblTotal;
   document.getElementById('btnReset').textContent = t().btnReset;
   document.getElementById('btnReport').textContent = t().btnReport;
+  document.getElementById('btnPayslip').textContent = t().btnPayslip;
   applyTaxLabels();
   // lang buttons
   document.querySelectorAll('.lang-btn').forEach(b=>{
@@ -850,6 +854,132 @@ function generateReport(){
   const a = document.createElement('a');
   a.href=url;
   a.download = weekVal?"tramper_"+weekVal+".txt":"tramper_report.txt";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function generatePayslip(){
+  const tr = t();
+  const weekVal = document.getElementById('weekStart').value;
+  const weekStart = weekVal ? new Date(weekVal+"T00:00:00") : null;
+  const weekEnd = weekStart ? new Date(weekStart) : null;
+  if(weekEnd) weekEnd.setDate(weekEnd.getDate()+6);
+  const fmtDate = d => d ? d.toLocaleDateString(tr.locale,{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+  const driverName = document.getElementById('driverName').value || '—';
+  const truckNum = document.getElementById('truckNum').value || '—';
+
+  // Collect earnings
+  let totalDays=0, totalOTHours=0, totalSatPay=0, totalSunPay=0;
+  let totalBasePay=0, totalOTPay=0, totalADR=0, totalGenset=0, totalSplitter=0;
+  let totalSamsara=0, totalMeal=0, totalNightOut=0, totalNightIn=0;
+  let totalGrossTaxable=0, totalTaxFree=0;
+
+  DAY_KEYS.forEach(key=>{
+    const d = state[key];
+    if(d.dayType==='off') return;
+    const hrs = parseFloat(d.hours)||0;
+    const {taxable, taxFree} = calcDayGross(d);
+    totalGrossTaxable += taxable;
+    totalTaxFree += taxFree;
+
+    if(d.dayType==='weekday'){
+      totalDays++;
+      totalBasePay += GROSS_RATES.basicDaily;
+      const ot = Math.max(0, hrs-11);
+      if(ot>0){ totalOTHours+=ot; totalOTPay+=ot*GROSS_RATES.otStandard; }
+      totalMeal += GROSS_RATES.mealAllowance;
+    } else if(d.dayType==='saturday'){
+      totalDays++;
+      totalSatPay += hrs<=5 ? hrs*GROSS_RATES.satRunUp5 : hrs*GROSS_RATES.satRunAfter5;
+      if(hrs>10) totalMeal+=GROSS_RATES.mealAllowance;
+    } else if(d.dayType==='sunday'||d.dayType==='bankholiday'){
+      totalDays++;
+      totalSunPay += hrs<=5 ? hrs*GROSS_RATES.sunRunUp5 : hrs*GROSS_RATES.sunRunAfter5;
+      if(hrs>10) totalMeal+=GROSS_RATES.mealAllowance;
+    } else if(d.dayType==='holiday'){
+      totalDays++;
+      totalBasePay += GROSS_RATES.holiday;
+    }
+    totalADR += (d.adr||0)*GROSS_RATES.adr;
+    totalGenset += (d.genset||0)*GROSS_RATES.genset;
+    totalSplitter += (d.splitter||0)*GROSS_RATES.splitter;
+    if(d.samsara==='A') totalSamsara+=GROSS_RATES.samsaraA;
+    else if(d.samsara==='B') totalSamsara+=GROSS_RATES.samsaraB;
+    else if(d.samsara==='C') totalSamsara+=GROSS_RATES.samsaraC;
+    if(d.nightOut){ totalNightOut+=GROSS_RATES.nightOut; }
+    if(d.nightIn){ totalNightIn+=GROSS_RATES.nightIn; }
+  });
+
+  const hmrc = calcHMRC(totalGrossTaxable);
+  const totalGross = totalGrossTaxable + totalTaxFree;
+  const pension = totalGross * 0.03; // ~3% estimate
+  const totalDeductions = hmrc.it20 + hmrc.it40 + hmrc.ni6 + hmrc.ni1 + pension;
+  const netPay = totalGross - totalDeductions;
+
+  // Format helpers
+  const col = (a,b,c,d) => {
+    const as=String(a).padEnd(24);
+    const bs=String(b).padStart(8);
+    const cs=String(c).padStart(8);
+    const ds=String(d).padStart(10);
+    return as+bs+cs+ds;
+  };
+  const fmtN = n => n>0 ? n.toFixed(2) : '';
+  const line = '─'.repeat(52);
+  const dline = '═'.repeat(52);
+
+  let lines=[];
+  lines.push(dline);
+  lines.push('  PAYSLIP');
+  lines.push(dline);
+  lines.push('  Driver:  '+driverName);
+  lines.push('  Truck:   '+truckNum);
+  lines.push('  Period:  '+fmtDate(weekStart)+' – '+fmtDate(weekEnd));
+  lines.push(dline);
+  lines.push('');
+  lines.push('  EARNINGS');
+  lines.push(line);
+  lines.push(col('Description','Units','Rate','Amount'));
+  lines.push(line);
+
+  if(totalBasePay>0)   lines.push(col('Days Worked', totalDays, '154.00', totalBasePay.toFixed(2)));
+  if(totalOTPay>0)     lines.push(col('Overtime', totalOTHours.toFixed(1), '15.00', totalOTPay.toFixed(2)));
+  if(totalSatPay>0)    lines.push(col('Saturday Hours', '', '', totalSatPay.toFixed(2)));
+  if(totalSunPay>0)    lines.push(col('Sun/BH Hours', '', '', totalSunPay.toFixed(2)));
+  if(totalSamsara>0)   lines.push(col('Performance Bonus', '', '', totalSamsara.toFixed(2)));
+  if(totalADR>0)       lines.push(col('ADR Bonus', '', '', totalADR.toFixed(2)));
+  if(totalGenset>0)    lines.push(col('Genset Bonus', '', '', totalGenset.toFixed(2)));
+  if(totalSplitter>0)  lines.push(col('Splitter Bonus', '', '', totalSplitter.toFixed(2)));
+  if(totalMeal>0)      lines.push(col('Meal Allowance', '', '10.00', totalMeal.toFixed(2)));
+  if(totalNightOut>0)  lines.push(col('Overnight Allowance', '', '26.20', totalNightOut.toFixed(2)));
+  if(totalNightIn>0)   lines.push(col('Night In Allowance', '', '16.00', totalNightIn.toFixed(2)));
+
+  lines.push(line);
+  lines.push(col('GROSS PAY','','',totalGross.toFixed(2)));
+  lines.push('');
+  lines.push('  DEDUCTIONS');
+  lines.push(line);
+  lines.push(col('Description','','','Amount'));
+  lines.push(line);
+  lines.push(col('PAYE tax','','',( hmrc.it20+hmrc.it40).toFixed(2)));
+  lines.push(col('National Insurance','','',( hmrc.ni6+hmrc.ni1).toFixed(2)));
+  lines.push(col('Pension (~3%)','','',pension.toFixed(2)));
+  lines.push(line);
+  lines.push(col('Total Deductions','','',totalDeductions.toFixed(2)));
+  lines.push('');
+  lines.push(dline);
+  lines.push(col('NET PAY','','','£'+netPay.toFixed(2)));
+  lines.push(dline);
+  lines.push('');
+  lines.push('* PAYE estimated (tax code 1257L). Pension estimate ~3%. Exact figures on official payslip.');
+  lines.push('Generated: '+new Date().toLocaleDateString(tr.locale,{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}));
+
+  const text = lines.join('\n');
+  const blob = new Blob(['\uFEFF'+text],{type:'text/plain;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url;
+  a.download = weekVal?'payslip_'+weekVal+'.txt':'payslip.txt';
   a.click();
   URL.revokeObjectURL(url);
 }
